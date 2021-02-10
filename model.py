@@ -10,16 +10,19 @@ from keras.layers import Cropping2D, Flatten, Dense, Lambda, Conv2D
 from keras.callbacks import ModelCheckpoint, EarlyStopping
 from math import ceil
 
+# Model Checkpoint callback
 model_checkpoint_callback = ModelCheckpoint(
                             filepath='checkpoint',
                             monitor = 'val_accuracy',
                             save_best_only=True)
 
+# Early stopping callback
 early_stopping_callback = EarlyStopping(
                           monitor='val_loss',
                           min_delta=0.01,
                           patience=3,
                           restore_best_weights=True)
+
                           
 lines = []
 with open('/home/workspace/aditya/driving_log.csv') as csvfile:
@@ -28,9 +31,11 @@ with open('/home/workspace/aditya/driving_log.csv') as csvfile:
         lines.append(line)
 
 print("Lines", len(lines))
+
+# Divide the training set into 80% training set and 20% validation set
 train_samples, validation_samples = train_test_split(lines, test_size=0.2)
 
-
+# Generator code
 def generator(samples, batch_size=32):
     num_samples = len(samples)
     while 1:
@@ -39,22 +44,26 @@ def generator(samples, batch_size=32):
             images = []
             measurements = []
             for line in batch:
-                path = line[0].split('\\')
-                path = '/home/workspace/aditya/IMG/' + path[-1] 
+                path = line[0].split('\\')   #Read the center image path from the csv file
+                path = '/home/workspace/aditya/IMG/' + path[-1]  
                 img = imread(path)
                 images.append(img)
-                measurement = float(line[3])
+                measurement = float(line[3])       #Consider only the steering angle
                 measurements.append(measurement)
             x = np.array(images)
             y = np.array(measurements)
+            # yield batch data in the form of image array and steering measurement
             yield (x, y)
+            # yield batch data in the form of flipped image array and negated sterring measurement
             yield (np.flip(x, -2), y*(-1))
 
 batch_size = 128
+
 train_generator = generator(train_samples, batch_size=batch_size)
 validation_generator = generator(validation_samples, batch_size=batch_size)
+
 model = Sequential()
-model.add(Lambda(lambda x: x / 255.0 - 0.5, input_shape=(160, 320, 3)))
+model.add(Lambda(lambda x: x / 255.0 - 0.5, input_shape=(160, 320, 3))) 
 model.add(Cropping2D(cropping=((50, 30), (0,0))))
 model.add(Conv2D(24, (5, 5), strides=(2, 2), activation='relu'))
 model.add(Conv2D(36, (5, 5), strides=(2, 2), activation='relu'))
@@ -66,7 +75,10 @@ model.add(Dense(100))
 model.add(Dense(50))
 model.add(Dense(10))
 model.add(Dense(1))
+
+# compile with mean squared error and adam optimizer
 model.compile(loss='mse', optimizer='adam')
+
 model.fit_generator(train_generator, steps_per_epoch=ceil(len(train_samples)/batch_size), 
                     validation_data=validation_generator, 
                     validation_steps=ceil(len(validation_samples)/batch_size), 
